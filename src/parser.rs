@@ -182,86 +182,91 @@ pub fn default_resolver(n: u64) -> usize {
     }
 }
 
-#[test]
-fn test_get_read_u32_fn() {
-    assert!(get_read_u32_fn(&[]).is_none());
-    assert!(get_read_u32_fn(&[0xde, 0x12, 0x04, 0x95, 0x00]).is_none());
+#[cfg(test)]
+mod test {
+    use super::*;
 
-    {
-        let le_ptr = LittleEndian::read_u32 as *const ();
-        let ret_ptr = get_read_u32_fn(&[0xde, 0x12, 0x04, 0x95]).unwrap() as _;
-        assert_eq!(le_ptr, ret_ptr);
+    #[test]
+    fn test_get_read_u32_fn() {
+        assert!(get_read_u32_fn(&[]).is_none());
+        assert!(get_read_u32_fn(&[0xde, 0x12, 0x04, 0x95, 0x00]).is_none());
+
+        {
+            let le_ptr = LittleEndian::read_u32 as *const ();
+            let ret_ptr = get_read_u32_fn(&[0xde, 0x12, 0x04, 0x95]).unwrap() as _;
+            assert_eq!(le_ptr, ret_ptr);
+        }
+
+        {
+            let be_ptr = BigEndian::read_u32 as *const ();
+            let ret_ptr = get_read_u32_fn(&[0x95, 0x04, 0x12, 0xde]).unwrap() as _;
+            assert_eq!(be_ptr, ret_ptr);
+        }
     }
 
-    {
-        let be_ptr = BigEndian::read_u32 as *const ();
-        let ret_ptr = get_read_u32_fn(&[0x95, 0x04, 0x12, 0xde]).unwrap() as _;
-        assert_eq!(be_ptr, ret_ptr);
-    }
-}
+    #[test]
+    fn test_parse_catalog() {
+        macro_rules! assert_variant {
+            ($value:expr, $variant:path) => {
+                match $value {
+                    $variant => (),
+                    _ => panic!("Expected {:?}, got {:?}", $variant, $value),
+                }
+            };
+        }
 
-#[test]
-fn test_parse_catalog() {
-    macro_rules! assert_variant {
-        ($value:expr, $variant:path) => {
-            match $value {
-                $variant => (),
-                _ => panic!("Expected {:?}, got {:?}", $variant, $value),
-            }
-        };
-    }
+        let fluff = [0; 24]; // zeros to pad our magic test cases to satisfy the length requirements
 
-    let fluff = [0; 24]; // zeros to pad our magic test cases to satisfy the length requirements
+        {
+            let mut reader = vec![1u8, 2, 3];
+            reader.extend(fluff.iter().cloned());
+            let err = parse_catalog(&reader[..], ParseOptions::new()).unwrap_err();
+            assert_variant!(err, Eof);
+        }
 
-    {
-        let mut reader = vec![1u8, 2, 3];
-        reader.extend(fluff.iter().cloned());
-        let err = parse_catalog(&reader[..], ParseOptions::new()).unwrap_err();
-        assert_variant!(err, Eof);
-    }
+        {
+            let mut reader = vec![1u8, 2, 3, 4];
+            reader.extend(fluff.iter().cloned());
+            let err = parse_catalog(&reader[..], ParseOptions::new()).unwrap_err();
+            assert_variant!(err, BadMagic);
+        }
 
-    {
-        let mut reader = vec![1u8, 2, 3, 4];
-        reader.extend(fluff.iter().cloned());
-        let err = parse_catalog(&reader[..], ParseOptions::new()).unwrap_err();
-        assert_variant!(err, BadMagic);
-    }
+        {
+            let mut reader = vec![0x95, 0x04, 0x12, 0xde];
+            reader.extend(fluff.iter().cloned());
+            assert!(parse_catalog(&reader[..], ParseOptions::new()).is_ok());
+        }
 
-    {
-        let mut reader = vec![0x95, 0x04, 0x12, 0xde];
-        reader.extend(fluff.iter().cloned());
-        assert!(parse_catalog(&reader[..], ParseOptions::new()).is_ok());
-    }
+        {
+            let mut reader = vec![0xde, 0x12, 0x04, 0x95];
+            reader.extend(fluff.iter().cloned());
+            assert!(parse_catalog(&reader[..], ParseOptions::new()).is_ok());
+        }
 
-    {
-        let mut reader = vec![0xde, 0x12, 0x04, 0x95];
-        reader.extend(fluff.iter().cloned());
-        assert!(parse_catalog(&reader[..], ParseOptions::new()).is_ok());
-    }
+        {
+            let reader: &[u8] = include_bytes!("../test_cases/1.mo");
+            let catalog = parse_catalog(reader, ParseOptions::new()).unwrap();
+            assert_eq!(catalog.strings.len(), 1);
+            assert_eq!(
+                catalog.strings["this is context\x04Text"],
+                Message::new("Text", Some("this is context"), vec!["Tekstas", "Tekstai"])
+            );
+        }
 
-    {
-        let reader: &[u8] = include_bytes!("../test_cases/1.mo");
-        let catalog = parse_catalog(reader, ParseOptions::new()).unwrap();
-        assert_eq!(catalog.strings.len(), 1);
-        assert_eq!(
-            catalog.strings["this is context\x04Text"],
-            Message::new("Text", Some("this is context"), vec!["Tekstas", "Tekstai"])
-        );
-    }
+        {
+            let reader: &[u8] = include_bytes!("../test_cases/2.mo");
+            let catalog = parse_catalog(reader, ParseOptions::new()).unwrap();
+            assert_eq!(catalog.strings.len(), 2);
+            assert_eq!(
+                catalog.strings["Image"],
+                Message::new("Image", None, vec!["Nuotrauka", "Nuotraukos"])
+            );
+        }
 
-    {
-        let reader: &[u8] = include_bytes!("../test_cases/2.mo");
-        let catalog = parse_catalog(reader, ParseOptions::new()).unwrap();
-        assert_eq!(catalog.strings.len(), 2);
-        assert_eq!(
-            catalog.strings["Image"],
-            Message::new("Image", None, vec!["Nuotrauka", "Nuotraukos"])
-        );
-    }
-
-    {
-        let reader: &[u8] = include_bytes!("../test_cases/invalid_utf8.mo");
-        let err = parse_catalog(reader, ParseOptions::new()).unwrap_err();
-        assert_variant!(err, DecodingError);
+        {
+            let reader: &[u8] = include_bytes!("../test_cases/invalid_utf8.mo");
+            let err = parse_catalog(reader, ParseOptions::new()).unwrap_err();
+            assert_variant!(err, DecodingError);
+        }
     }
 }

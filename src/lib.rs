@@ -225,112 +225,117 @@ impl Message {
 
 #[test]
 fn catalog_impls_send_sync() {
-    fn check<T: Send + Sync>(_: T) {};
+    fn check<T: Send + Sync>(_: T) {}
     check(Catalog::new());
 }
 
-#[test]
-fn catalog_insert() {
-    let mut cat = Catalog::new();
-    cat.insert(Message::new("thisisid", None, vec![]));
-    cat.insert(Message::new("anotherid", Some("context"), vec![]));
-    let mut keys = cat.strings.keys().collect::<Vec<_>>();
-    keys.sort();
-    assert_eq!(keys, &["context\x04anotherid", "thisisid"])
-}
+#[cfg(test)]
+mod test {
+    use super::*;
 
-#[test]
-fn catalog_gettext() {
-    let mut cat = Catalog::new();
-    cat.insert(Message::new("Text", None, vec!["Tekstas"]));
-    cat.insert(Message::new("Image", Some("context"), vec!["Paveikslelis"]));
-    assert_eq!(cat.gettext("Text"), "Tekstas");
-    assert_eq!(cat.gettext("Image"), "Image");
-}
+    #[test]
+    fn catalog_insert() {
+        let mut cat = Catalog::new();
+        cat.insert(Message::new("thisisid", None, vec![]));
+        cat.insert(Message::new("anotherid", Some("context"), vec![]));
+        let mut keys = cat.strings.keys().collect::<Vec<_>>();
+        keys.sort();
+        assert_eq!(keys, &["context\x04anotherid", "thisisid"])
+    }
 
-#[test]
-fn catalog_ngettext() {
-    let mut cat = Catalog::new();
-    {
-        // n == 1, no translation
-        assert_eq!(cat.ngettext("Text", "Texts", 1), "Text");
-        // n != 1, no translation
-        assert_eq!(cat.ngettext("Text", "Texts", 0), "Texts");
+    #[test]
+    fn catalog_gettext() {
+        let mut cat = Catalog::new();
+        cat.insert(Message::new("Text", None, vec!["Tekstas"]));
+        cat.insert(Message::new("Image", Some("context"), vec!["Paveikslelis"]));
+        assert_eq!(cat.gettext("Text"), "Tekstas");
+        assert_eq!(cat.gettext("Image"), "Image");
+    }
+
+    #[test]
+    fn catalog_ngettext() {
+        let mut cat = Catalog::new();
+        {
+            // n == 1, no translation
+            assert_eq!(cat.ngettext("Text", "Texts", 1), "Text");
+            // n != 1, no translation
+            assert_eq!(cat.ngettext("Text", "Texts", 0), "Texts");
+            assert_eq!(cat.ngettext("Text", "Texts", 2), "Texts");
+        }
+        {
+            cat.insert(Message::new("Text", None, vec!["Tekstas", "Tekstai"]));
+            // n == 1, translation available
+            assert_eq!(cat.ngettext("Text", "Texts", 1), "Tekstas");
+            // n != 1, translation available
+            assert_eq!(cat.ngettext("Text", "Texts", 0), "Tekstai");
+            assert_eq!(cat.ngettext("Text", "Texts", 2), "Tekstai");
+        }
+    }
+
+    #[test]
+    fn catalog_ngettext_not_enough_forms_in_message() {
+        fn resolver(count: u64) -> usize {
+            count as usize
+        }
+
+        let mut cat = Catalog::new();
+        cat.insert(Message::new("Text", None, vec!["Tekstas", "Tekstai"]));
+        cat.resolver = Resolver::Function(resolver);
+        assert_eq!(cat.ngettext("Text", "Texts", 0), "Tekstas");
+        assert_eq!(cat.ngettext("Text", "Texts", 1), "Tekstai");
         assert_eq!(cat.ngettext("Text", "Texts", 2), "Texts");
     }
-    {
-        cat.insert(Message::new("Text", None, vec!["Tekstas", "Tekstai"]));
-        // n == 1, translation available
-        assert_eq!(cat.ngettext("Text", "Texts", 1), "Tekstas");
-        // n != 1, translation available
-        assert_eq!(cat.ngettext("Text", "Texts", 0), "Tekstai");
-        assert_eq!(cat.ngettext("Text", "Texts", 2), "Tekstai");
-    }
-}
 
-#[test]
-fn catalog_ngettext_not_enough_forms_in_message() {
-    fn resolver(count: u64) -> usize {
-        count as usize
-    }
+    #[test]
+    fn catalog_npgettext_not_enough_forms_in_message() {
+        fn resolver(count: u64) -> usize {
+            count as usize
+        }
 
-    let mut cat = Catalog::new();
-    cat.insert(Message::new("Text", None, vec!["Tekstas", "Tekstai"]));
-    cat.resolver = Resolver::Function(resolver);
-    assert_eq!(cat.ngettext("Text", "Texts", 0), "Tekstas");
-    assert_eq!(cat.ngettext("Text", "Texts", 1), "Tekstai");
-    assert_eq!(cat.ngettext("Text", "Texts", 2), "Texts");
-}
-
-#[test]
-fn catalog_npgettext_not_enough_forms_in_message() {
-    fn resolver(count: u64) -> usize {
-        count as usize
+        let mut cat = Catalog::new();
+        cat.insert(Message::new(
+            "Text",
+            Some("ctx"),
+            vec!["Tekstas", "Tekstai"],
+        ));
+        cat.resolver = Resolver::Function(resolver);
+        assert_eq!(cat.npgettext("ctx", "Text", "Texts", 0), "Tekstas");
+        assert_eq!(cat.npgettext("ctx", "Text", "Texts", 1), "Tekstai");
+        assert_eq!(cat.npgettext("ctx", "Text", "Texts", 2), "Texts");
     }
 
-    let mut cat = Catalog::new();
-    cat.insert(Message::new(
-        "Text",
-        Some("ctx"),
-        vec!["Tekstas", "Tekstai"],
-    ));
-    cat.resolver = Resolver::Function(resolver);
-    assert_eq!(cat.npgettext("ctx", "Text", "Texts", 0), "Tekstas");
-    assert_eq!(cat.npgettext("ctx", "Text", "Texts", 1), "Tekstai");
-    assert_eq!(cat.npgettext("ctx", "Text", "Texts", 2), "Texts");
-}
+    #[test]
+    fn catalog_pgettext() {
+        let mut cat = Catalog::new();
+        cat.insert(Message::new("Text", Some("unit test"), vec!["Tekstas"]));
+        assert_eq!(cat.pgettext("unit test", "Text"), "Tekstas");
+        assert_eq!(cat.pgettext("integration test", "Text"), "Text");
+    }
 
-#[test]
-fn catalog_pgettext() {
-    let mut cat = Catalog::new();
-    cat.insert(Message::new("Text", Some("unit test"), vec!["Tekstas"]));
-    assert_eq!(cat.pgettext("unit test", "Text"), "Tekstas");
-    assert_eq!(cat.pgettext("integration test", "Text"), "Text");
-}
+    #[test]
+    fn catalog_npgettext() {
+        let mut cat = Catalog::new();
+        cat.insert(Message::new(
+            "Text",
+            Some("unit test"),
+            vec!["Tekstas", "Tekstai"],
+        ));
 
-#[test]
-fn catalog_npgettext() {
-    let mut cat = Catalog::new();
-    cat.insert(Message::new(
-        "Text",
-        Some("unit test"),
-        vec!["Tekstas", "Tekstai"],
-    ));
+        assert_eq!(cat.npgettext("unit test", "Text", "Texts", 1), "Tekstas");
+        assert_eq!(cat.npgettext("unit test", "Text", "Texts", 0), "Tekstai");
+        assert_eq!(cat.npgettext("unit test", "Text", "Texts", 2), "Tekstai");
 
-    assert_eq!(cat.npgettext("unit test", "Text", "Texts", 1), "Tekstas");
-    assert_eq!(cat.npgettext("unit test", "Text", "Texts", 0), "Tekstai");
-    assert_eq!(cat.npgettext("unit test", "Text", "Texts", 2), "Tekstai");
-
-    assert_eq!(
-        cat.npgettext("integration test", "Text", "Texts", 1),
-        "Text"
-    );
-    assert_eq!(
-        cat.npgettext("integration test", "Text", "Texts", 0),
-        "Texts"
-    );
-    assert_eq!(
-        cat.npgettext("integration test", "Text", "Texts", 2),
-        "Texts"
-    );
+        assert_eq!(
+            cat.npgettext("integration test", "Text", "Texts", 1),
+            "Text"
+        );
+        assert_eq!(
+            cat.npgettext("integration test", "Text", "Texts", 0),
+            "Texts"
+        );
+        assert_eq!(
+            cat.npgettext("integration test", "Text", "Texts", 2),
+            "Texts"
+        );
+    }
 }

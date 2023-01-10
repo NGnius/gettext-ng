@@ -1,5 +1,5 @@
 use encoding::label::encoding_from_whatwg_label;
-use gettext::{Catalog, ParseOptions};
+use gettext_ng::{Catalog, ParseOptions};
 
 use std::fs::File;
 

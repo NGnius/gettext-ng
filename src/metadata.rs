@@ -66,39 +66,44 @@ pub fn parse_metadata(blob: &str) -> Result<MetadataMap, Error> {
     Ok(map)
 }
 
-#[test]
-fn test_metadatamap_charset() {
-    {
-        let mut map = MetadataMap(HashMap::new());
-        assert!(map.charset().is_none());
-        map.insert("Content-Type", "");
-        assert!(map.charset().is_none());
-        map.insert("Content-Type", "abc");
-        assert!(map.charset().is_none());
-        map.insert("Content-Type", "text/plain; charset=utf-42");
-        assert_eq!(map.charset().unwrap(), "utf-42");
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_metadatamap_charset() {
+        {
+            let mut map = MetadataMap(HashMap::new());
+            assert!(map.charset().is_none());
+            map.insert("Content-Type", "");
+            assert!(map.charset().is_none());
+            map.insert("Content-Type", "abc");
+            assert!(map.charset().is_none());
+            map.insert("Content-Type", "text/plain; charset=utf-42");
+            assert_eq!(map.charset().unwrap(), "utf-42");
+        }
     }
-}
 
-#[test]
-fn test_metadatamap_plural() {
-    {
-        let mut map = MetadataMap(HashMap::new());
-        assert_eq!(map.plural_forms(), (None, None));
+    #[test]
+    fn test_metadatamap_plural() {
+        {
+            let mut map = MetadataMap(HashMap::new());
+            assert_eq!(map.plural_forms(), (None, None));
 
-        map.insert("Plural-Forms", "");
-        assert_eq!(map.plural_forms(), (None, None));
-        // n_plural
-        map.insert("Plural-Forms", "n_plurals=42");
-        assert_eq!(map.plural_forms(), (Some(42), None));
-        // plural is specified
-        map.insert("Plural-Forms", "n_plurals=2; plural=n==12");
-        assert_eq!(map.plural_forms(), (Some(2), Some("n==12")));
-        // plural before n_plurals
-        map.insert("Plural-Forms", "plural=n==12; n_plurals=2");
-        assert_eq!(map.plural_forms(), (Some(2), Some("n==12")));
-        // with spaces
-        map.insert("Plural-Forms", " n_plurals = 42 ; plural = n >  10   ");
-        assert_eq!(map.plural_forms(), (Some(42), Some("n >  10")));
+            map.insert("Plural-Forms", "");
+            assert_eq!(map.plural_forms(), (None, None));
+            // n_plural
+            map.insert("Plural-Forms", "n_plurals=42");
+            assert_eq!(map.plural_forms(), (Some(42), None));
+            // plural is specified
+            map.insert("Plural-Forms", "n_plurals=2; plural=n==12");
+            assert_eq!(map.plural_forms(), (Some(2), Some("n==12")));
+            // plural before n_plurals
+            map.insert("Plural-Forms", "plural=n==12; n_plurals=2");
+            assert_eq!(map.plural_forms(), (Some(2), Some("n==12")));
+            // with spaces
+            map.insert("Plural-Forms", " n_plurals = 42 ; plural = n >  10   ");
+            assert_eq!(map.plural_forms(), (Some(42), Some("n >  10")));
+        }
     }
 }
