@@ -176,6 +176,30 @@ impl Catalog {
             _ => unreachable!(),
         }
     }
+
+    /// Returns all known translation strings
+    /// and the gettext translation for it.
+    pub fn alltext<'b: 'a, 'a>(
+        &'b self,
+    ) -> HashMap<&'a str, &'a str> {
+        let mut result = HashMap::<&'a str, &'a str>::with_capacity(self.strings.len());
+        for (key, msg) in self.strings.iter() {
+            result.insert(key, msg.get_translated(0).unwrap_or(key));
+        }
+        result
+    }
+
+    /// Returns all known translation strings
+    /// and all of the ngettext translations for it.
+    pub fn nalltext<'b: 'a, 'a>(
+        &'b self,
+    ) -> HashMap<&'a str, &'a Vec<String>> {
+        let mut result = HashMap::<&'a str, &'a Vec<String>>::with_capacity(self.strings.len());
+        for (key, msg) in self.strings.iter() {
+            result.insert(key, &msg.translated);
+        }
+        result
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
